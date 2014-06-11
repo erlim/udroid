@@ -9,8 +9,8 @@
 #include <time.h>
 
 #define UDROID_DEVICE_FD  "/dev/udroid_device"
-#define UDROID_IO_DIR     "/data/udroid/io"
-#define UDROID_FILELS_DIR "/data/udroid/filels"
+#define UDROID_IO_DIR     "/storage/sdcard0/udroid/io"
+#define UDROID_FILELS_DIR "/storage/sdcard0/udroid/filels"
 
 #include "udroid.h"
 
@@ -63,16 +63,17 @@ static void io_file_write()
 	memset(io_buf_data, 0, IO_BUF_SIZE);
 	
 	read_bytes = read(dev_fd, io_buf_data, IO_LOG); //type: what buffer user want to read from kernel	
-
-	if(io_f_offset + read_bytes <= IO_FILE_SIZE){
-		write_bytes = write(io_fd, io_buf_data, read_bytes);
-		io_f_offset += write_bytes;
-	}else{
-		close(io_fd);
-		io_fd = log_file_open(IO_LOG);	
-		io_f_offset = 0;
-		write_bytes = write(io_fd, io_buf_data, read_bytes);
-		io_f_offset += write_bytes;
+	if(read_bytes > 0){
+		if(io_f_offset + read_bytes <= IO_FILE_SIZE){
+			write_bytes = write(io_fd, io_buf_data, read_bytes);
+			io_f_offset += write_bytes;
+		}else{
+			close(io_fd);
+			io_fd = log_file_open(IO_LOG);	
+			io_f_offset = 0;
+			write_bytes = write(io_fd, io_buf_data, read_bytes);
+			io_f_offset += write_bytes;
+		}
 	}
 }
 static void fls_file_write()
@@ -81,16 +82,17 @@ static void fls_file_write()
 	memset(fls_buf_data, 0, FILELS_BUF_SIZE);
 
 	read_bytes = read(dev_fd, fls_buf_data, FILELS_LOG); //type: what buffer user want to read from kernel	
-
-	if(fls_f_offset + read_bytes <= FILELS_FILE_SIZE){
-		write_bytes = write(fls_fd, fls_buf_data, read_bytes);
-		fls_f_offset += write_bytes;
-	}else{
-		close(fls_fd);
-		fls_fd = log_file_open(FILELS_LOG);	
-		fls_f_offset = 0;
-		write_bytes = write(fls_fd, fls_buf_data, read_bytes);
-		fls_f_offset += write_bytes;
+	if(read_bytes > 0){
+		if(fls_f_offset + read_bytes <= FILELS_FILE_SIZE){
+			write_bytes = write(fls_fd, fls_buf_data, read_bytes);
+			fls_f_offset += write_bytes;
+		}else{
+			close(fls_fd);
+			fls_fd = log_file_open(FILELS_LOG);	
+			fls_f_offset = 0;
+			write_bytes = write(fls_fd, fls_buf_data, read_bytes);
+			fls_f_offset += write_bytes;
+		}
 	}
 }
 

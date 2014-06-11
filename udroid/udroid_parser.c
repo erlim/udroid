@@ -12,13 +12,13 @@ static int io_parser()
 {
 	FILE *read_file, *parse_file;
 	struct uio log;
-	int log_size;
+	int log_size = 0;
 	char pname[16];
-	int fname_len;
+	int fname_len = 0;
 	char fname[100];
 	char s_log[200];
+	int idx = 0;
 	
-	log_size = 0;
 	memset(pname, 0, 16);
 	memset(fname,0,100);
 	memset(s_log,0,200);
@@ -34,6 +34,7 @@ static int io_parser()
 		return -1;
 	}
 	while(!feof(read_file)){
+		idx +=1;
 		memset(s_log,0,200);
 		memset(pname, 0, 16);
 		fread(&log_size, 1,1,read_file);
@@ -42,14 +43,14 @@ static int io_parser()
 		fread(&fname_len, 1, 1, read_file);
 		fread(fname, fname_len, 1, read_file);
 	
-		sprintf(s_log, "%d%d%d%d%d%d %d\t ext:%d\t rwbs:%d\t  fsync:%d %d\t device:%d %d\t sector_nb:%d %d\t %s\t %s\n", 
-				log.year,log.month,log.day,log.hour,log.min,log.sec, log.nsec,
+		sprintf(s_log, "[%d] %d%d%d%d%d%d %d\t ext:%d\t rwbs:%d\t  fsync:%d %d\t device:%d %d\t sector:%d %d\t %s\t %s\n", 
+				idx, log.year,log.month,log.day,log.hour,log.min,log.sec, log.nsec,
 				log.ext, log.rwbs, log.fsync, log.fdatasync, 
 				log.major_dev, log.minor_dev, log.sector_nb, log.block_len, 
 				pname, fname);
 
 		printf("%s\n", s_log);
-		fwrite(s_log, 1, strlen(s_log), parse_file);
+		//fwrite(s_log, 1, strlen(s_log), parse_file);
 	}
 	
 	return 0;

@@ -234,6 +234,8 @@ static int udroid_release(struct inode *inode, struct file *file)
 	fls_buf_hand = NULL;
 	raw_spin_unlock_irq(&fls_buf_lock);
 
+	file->private_data = NULL;
+
 	return 0;
 }
 

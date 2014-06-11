@@ -72,14 +72,6 @@ extern raw_spinlock_t io_buf_lock;
 extern wait_queue_head_t wait_queue;
 #endif
 
-#ifndef CONFIG_DEBUG_RYOUNG
-//#define CONFIG_DEBUG_RYOUNG
-int g_total_num =0;
-int g_not_num =0;
-int g_merge_num  =0;
-int g_no_num =0;
-#endif
-
 /*
  * Controlling structure to kblockd
  */
@@ -1733,178 +1725,6 @@ end_io:
 	return false;
 }
 
-//#ifdef CONFIG_UDROID 
-/**
- * udroid_io_log - get io trace when process call submit_bio() 
- * @rw: whether to %READ or %WRITE, or maybe to %READA (read ahead) from submit_bio()
-	rw: int rw is ok, but bio->bi_rw's data type is long
- * @bio: The &struct bio which describes the I/O from submit_bio()
-*/
-/*
-static bool udroid_io_log(long rw, struct bio *bio)
-{
-	struct uio log; 
-	int log_size;	
-	char str_log[100];     		//debuging 
-	bool find; 			//find buffer to save log 
-	int idx;			//buffer index
-	struct inode *inode;
-	struct address_space *mapping; 	//140501 add ryoung (fsync, fdatsync)
-	struct list_head *next; 	//dentry.next
-	struct dentry *dentry;
-	char *file_name;		//to get file ext, it from dentry.name; 
-	struct timespec ts_now;		//io date 
-	struct tm tm;			//time_to_tm(timeconv)
-	char process_name[PNAME_MAX];	//process name
-	int pname_len;			//process length
-
-return false;
-
-	//get current time
-	getnstimeofday(&ts_now);
-	ts_now.tv_sec += 60 * 60 * 9;   //GMT +9hour;
-
-	log_size = 0;
-	memset(str_log, 0, 100);
-	find = false;
-	idx = 0;
-	inode = NULL;
-	mapping = NULL;
-	next = NULL;
-	dentry = NULL;
-	file_name = NULL;
-	memset(process_name,0,PNAME_MAX);
-	pname_len = 0;
-
-	//check buffer is allocated?
-	if(io_buf_hand == NULL){	
-//		g_not_num += 1;
-		return false;
-	}
-	
-	mapping = bio->bi_io_vec->bv_page->mapping;
-	if(mapping->host){
-		inode = mapping->host;
-	}
-	if(inode && inode->i_ino!=0 && inode->i_dentry.next){	
-		next = inode->i_dentry.next;
-		dentry = list_entry(next, struct dentry, d_alias);
-		if(!dentry){
-			return false;
-		}
-		file_name = (char *)dentry->d_name.name;
-		pname_len = strlen(current->comm);
-		log_size =  sizeof(struct uio) + pname_len;
-		time_to_tm(ts_now.tv_sec, 0, &tm);
-		log.year = tm.tm_year + 1900 - YEAR_BASE;
-		//save log, after 2014 year
-		//140529, -ryoung, sleep(10);
-		//if(log.year < YEAR_RELEASE){
-		//	return false;
-		//}
-		log.month = tm.tm_mon + 1;
-		log.day = tm.tm_mday;
-		log.hour = tm.tm_hour;
-		log.min = tm.tm_min;
-		log.sec = tm.tm_sec;
-		log.nsec = ts_now.tv_nsec;
-		//140426 add ryoung, no need to save udroid log file  
-		log.ext = get_file_ext(file_name);
-		if(log.ext == UDROID_FILE){
-			return false;
-		}
-
-//		g_total_num +=1;
-		//find buffer with enough space
-		for(idx = 0; idx< IO_BUF_COUNT; ++idx){
-			if(io_buf_hand->full){   //user daemon hasn't read full buffer yet
-				raw_spin_lock_irq(&io_buf_lock);
-				io_buf_hand = io_buf_hand->next;
-				raw_spin_unlock_irq(&io_buf_lock);
-			}else if(io_buf_hand->offset + log_size > IO_BUF_SIZE){ //buffer has no space to save log 
-				raw_spin_lock_irq(&io_buf_lock);
-				io_buf_hand->full = true;
-				raw_spin_unlock_irq(&io_buf_lock);
-				wake_up_interruptible(&wait_queue); //wake up user daemon 
-				raw_spin_lock_irq(&io_buf_lock);
-				io_buf_hand = io_buf_hand->next;
-				raw_spin_unlock_irq(&io_buf_lock);
-			}
-			else{
-				find = true;
-				break;
-			}
-		}
-		if(!find){ //no enough buffer 
-//			g_no_num +=1;
-			return false;
-		}
-		//--->colloect log data
-		switch(rw){
-			case READ:
-				log.rwbs = READ_NONE_MODE;   
-				break;
-			case WRITE:
-				log.rwbs = WRITE_NONE_MODE; 
-				break;
-			case READ_SYNC:
-				log.rwbs = READ_SYNC_MODE;  
-				break;
-			case WRITE_SYNC:
-				log.rwbs = WRITE_SYNC_MODE;;
-				break;
-			default: //@todo.check error
-				break;
-		}
-		log.fsync = mapping->fsync; //140429 ryoung fsync, fdatasync
-		log.fdatasync = mapping->fdatasync;	
-		//140523 add ryoung, major,minor device
-		log.major_dev = MAJOR(inode->i_sb->s_dev);
-		log.minor_dev = MINOR(inode->i_sb->s_dev);
-		log.sector_nb = (unsigned int)bio->bi_sector;
-		log.block_len = (unsigned int)bio->bi_size / 512; //inode->i_blocks; 140501 modify ryoung, refer blktrace
-		strcpy(process_name, current->comm);
-			
-		//--->save log data 
-		raw_spin_lock_irq(&io_buf_lock);
-		//log size(parsing)
-		memcpy(io_buf_hand->data + io_buf_hand->offset, &log_size, 1);
-		io_buf_hand->offset += 1;
-		//data(uio)
-		memcpy(io_buf_hand->data + io_buf_hand->offset, &log, sizeof(struct uio)); 
-		io_buf_hand->offset += sizeof(struct uio);
-		//process name
-		memcpy(io_buf_hand->data + io_buf_hand->offset, process_name, pname_len);
-		io_buf_hand->offset += pname_len;
-		raw_spin_unlock_irq(&io_buf_lock);				
-
-		//printk("[udroid] %d/%d/%d/\n", g_not_num, g_no_num, g_total_num);
-		
-		sprintf(str_log, "%d%d%d%d%d%d\t %d %d\t %d %d\t %d %d\t %d%d\t %s", 
-				log.year,log.month, log.day, log.hour, log.min, log.sec,
-				log.ext, log.rwbs, log.fsync, log.fdatasync,
- 				log.major_dev, log.minor_dev,
-				log.sector_nb, log.block_len,
-				process_name);
-		printk(KERN_INFO "[udroid] %d/%d/%d, %s\n", g_not_num, g_no_num, g_total_num, str_log);
-		
-		
-		//140523, add ryoung, if file will be over 
-		if(io_buf_hand->offset + 1 + sizeof(struct uio) + PNAME_MAX > IO_BUF_SIZE){ //buffer has no space to save log 
-			raw_spin_lock_irq(&io_buf_lock);
-			io_buf_hand->full = true;
-			raw_spin_unlock_irq(&io_buf_lock);
-			wake_up_interruptible(&wait_queue); //wake up user daemon 
-			raw_spin_lock_irq(&io_buf_lock);
-			io_buf_hand = io_buf_hand->next;
-			raw_spin_unlock_irq(&io_buf_lock);
-		}
-	}
-	return true;
-}
-#endif
-*/
-
 /**
  * generic_make_request - hand a buffer to its device driver for I/O
  * @bio:  The bio describing the location in memory and on the device.
@@ -2017,18 +1837,11 @@ void submit_bio(int rw, struct bio *bio)
 				bdevname(bio->bi_bdev, b),
 				count);
 		}
-
-//140603 modify ryoung 
-//before: log IO trace when submi_bio() is called 
-//after: log IO trace after that bio has been mergead into request on reqeust queue 
-/*
 #ifdef CONFIG_UDROID
-	if(bio && bio->bi_io_vec && bio->bi_io_vec->bv_page && bio->bi_io_vec->bv_page->mapping){
-		udroid_io_log(bio->bi_rw, bio);				
-	}
+		if(bio && bio->bi_io_vec && bio->bi_io_vec->bv_page && bio->bi_io_vec->bv_page->mapping){
+			bio->bi_pid = task_pid_nr(current);
+		}
 #endif
-*/
-
 	}
 	generic_make_request(bio);
 }
@@ -2233,43 +2046,25 @@ static inline struct request *blk_pm_peek_request(struct request_queue *q,
 static bool udroid_io_log(struct request *rq)
 {
 	struct uio log; 
-	int log_size;	
-	char str_log[200];     		//debuging 
-	bool find; 			//find buffer to save log 
-	int idx;			//buffer index
-	struct timespec ts_now;		//date 
-	struct tm tm;			//time_to_tm(timeconv)
-	struct bio *bio;		//request's first bio
-	struct bio *bio_next;
-	struct address_space *mapping;  //address_space, to get fsync/fdatasync
-	struct address_space *mapping_next;
-	struct inode *inode;		//bio's address_space->inode
-	struct inode *inode_next;
-	struct list_head *next;		//dentry.next
-	struct dentry *dentry;		//dentry, to get file name
-	int pname_len;
+	int log_size = 0;	
+	char str_log[200];     			//debuging 
+	bool find = false; 			//find buffer to save log 
+	int idx = 0;				//buffer index
+	struct timespec ts_now;			//date 
+	struct tm tm;				//time_to_tm(timeconv)
+	struct bio *bio = NULL;			//request's first bio
+	struct address_space *mapping = NULL;   //address_space, to get fsync/fdatasync
+	struct inode *inode = NULL;		//bio's address_space->inode
+	struct list_head *next = NULL;		//dentry.next
+	struct dentry *dentry = NULL;		//dentry, to get file name
+	struct task_struct *bio_task = NULL;    //process who submit bio
+	int pname_len = 0;
 	char pname[PNAME_MAX];
-	char file_count;
-	int fname_len;
-	char *fname; 
+	int fname_len = 0;
+	char *fname = NULL; 
 
-	memset(str_log,0,200);
-	log_size = 0;
-	find = false;
-	idx = 0;
-	bio = NULL;
-	bio_next = NULL;
-	mapping = NULL;
-	mapping_next = NULL;
-	inode = NULL;
-	inode_next = NULL;
-	next = NULL;
-	dentry= NULL;
-	pname_len = 0;
-	memset(pname,0,PNAME_MAX);
-	file_count = 1; //@todo. think!
-	fname_len = 0;
-	fname = NULL;
+	memset(str_log, 0, 200);
+	memset(pname, 0, PNAME_MAX);
 
 	//get current time
 	getnstimeofday(&ts_now);
@@ -2291,67 +2086,10 @@ static bool udroid_io_log(struct request *rq)
 			if(!dentry){
 				return false;
 			}
-// ===================================
-/*
-
-			while(bio != rq->biotail){
-				bio_next = bio->bi_next;
-				mapping = bio->bi_io_vec->bv_page->mapping;
-				inode = mapping->host;
-
-				if(IS_ERR(inode)){
-					printk("[udroid][error] inode\n");
-					return false;
-				}
-
-				mapping_next = bio_next->bi_io_vec->bv_page->mapping;
-				inode_next = mapping_next->host;
-				if(IS_ERR(inode_next)){
-					printk("[udroid][error] inode_next\n");
-
-					return false;
-				}
-				if(!inode || inode->i_ino == 0){
-					printk("inode->i_ino ==0\n");
-
-					return false;
-				}
-				if(!inode_next || inode_next->i_ino == 0){
-					printk("inode_next->i_ino ==0\n");
-					return false;
-
-				}
-				if(inode != inode_next){
-					file_count ++;
-					//inode
-
-					next = inode->i_dentry.next;
-					dentry = list_entry(next, struct dentry, d_alias);
-					fname = (char*)dentry->d_name.name;
-			//		printk("[%d] %s %d %d\t", file_count-1, fname, mapping->fsync, mapping->fdatasync);
-
-					if(bio_next == rq->biotail){
-						//inode_next
-						next = inode_next->i_dentry.next;
-
-						dentry = list_entry(next, struct dentry, d_alias);
-						fname = (char*)dentry->d_name.name;
-			//			printk("[%d] %s %d %d\t", file_count, fname, mapping_next->fsync, mapping_next->fdatasync);
-
-					}
-				}
-				bio = bio_next;
-			};
-			if(file_count > 1){
-
-			//	printk("[udroid] %d, %d/%d\n", file_count, g_merge_num , g_total_num);
-			}
-*/
-// ================================
 
 			fname = (char*)dentry->d_name.name;
 			fname_len = strlen(fname);
-	
+
 			//--->colloect log data
 			log.year = tm.tm_year + 1900 - YEAR_BASE;
 			//save log, after 2014 year
@@ -2376,20 +2114,77 @@ static bool udroid_io_log(struct request *rq)
 			log.minor_dev = MINOR(inode->i_sb->s_dev);
 			log.sector_nb = (int)blk_rq_pos(rq);
 			log.block_len = (int)blk_rq_bytes(rq) / 512; //inode->i_blocks; 140501 modify ryoung, refer blktrace
-			//log.pid =  task_pid_nr(current); //140603 add ryoung, process id, 140605 -ryoung, no need 
-			pname_len = strlen(current->comm);
-			log.pname_len = pname_len;
-			strcpy(pname, current->comm);
+			if(bio->bi_pid < 0){
+				printk("[udroid] %s(), bio->bi_pid < 0\n", __func__);
+			}else{
+				bio_task = find_task_by_vpid(bio->bi_pid);
+				if(!IS_ERR(bio_task)){
+					strcpy(pname, bio_task->comm);
+					//log.pid =  task_pid_nr(current); //140603 add ryoung, process id, 140605 -ryoung, no need 
+					pname_len = strlen(pname);
+					log.pname_len = pname_len;	
+				}else{
+					printk("[udroid] %s(), failed to get process name\n", __func__);
+				}
+			}
 			log_size = sizeof(struct uio);
-			log_size += pname_len + 1/*fname size*/ + fname_len;
+			log_size += pname_len/*pname*/ + 1/*fname size*/ + fname_len/*fname*/;
 			
 			//--->find buffer & save log data 
-			for(idx = 0; idx< IO_BUF_COUNT; ++idx){
-				if(io_buf_hand->full){   //user daemon hasn't read full buffer yet
-					raw_spin_lock_irq(&io_buf_lock);
-					io_buf_hand = io_buf_hand->next;
-					raw_spin_unlock_irq(&io_buf_lock);
-				}else if(io_buf_hand->offset + log_size > IO_BUF_SIZE){ //buffer has no space to save log 
+			//140610 add ryoung, address check
+			if(!IS_ERR(io_buf_hand)){
+				for(idx = 0; idx< IO_BUF_COUNT; ++idx){
+					if(io_buf_hand->full){   //user daemon hasn't read full buffer yet
+						raw_spin_lock_irq(&io_buf_lock);
+						io_buf_hand = io_buf_hand->next;
+						raw_spin_unlock_irq(&io_buf_lock);
+					}else if(io_buf_hand->offset + log_size > IO_BUF_SIZE){ //buffer has no space to save log 
+						raw_spin_lock_irq(&io_buf_lock);
+						io_buf_hand->full = true;
+						raw_spin_unlock_irq(&io_buf_lock);
+						wake_up_interruptible(&wait_queue); //wake up user daemon 
+						raw_spin_lock_irq(&io_buf_lock);
+						io_buf_hand = io_buf_hand->next;
+						raw_spin_unlock_irq(&io_buf_lock);
+					}
+					else{
+						find = true;
+						break;
+					}
+				}
+				if(!find){ //no enough buffer;
+					return false;
+				}
+
+				raw_spin_lock_irq(&io_buf_lock);
+				//log size(parsing)
+				memcpy(io_buf_hand->data + io_buf_hand->offset, &log_size, 1);
+				io_buf_hand->offset += 1;
+				//data(uio)
+				memcpy(io_buf_hand->data + io_buf_hand->offset, &log, sizeof(struct uio)); 
+				io_buf_hand->offset += sizeof(struct uio);
+				//process name
+				memcpy(io_buf_hand->data + io_buf_hand->offset, pname, pname_len);
+				io_buf_hand->offset += pname_len;
+				//file name's length
+				memcpy(io_buf_hand->data + io_buf_hand->offset, &fname_len, 1);
+				io_buf_hand->offset += 1;
+				//file name
+				memcpy(io_buf_hand->data + io_buf_hand->offset, fname, fname_len);
+				io_buf_hand->offset += fname_len;
+				raw_spin_unlock_irq(&io_buf_lock);				
+	
+	/*			sprintf(str_log, "%d%d%d%d%d%d\t %d %d\t %d %d\t %d %d\t %d %d\t %s\t %s\t", 
+						log.year,log.month, log.day, log.hour, log.min, log.sec,
+						log.ext, log.rwbs, log.fsync, log.fdatasync,
+						log.major_dev, log.minor_dev,
+						log.sector_nb, log.block_len,
+						pname, fname);
+				printk("[udroid]%s\n", str_log);
+	*/
+
+				//140523, add ryoung, if file will be over 
+				if(io_buf_hand->offset + 1/*log size, char*/ + log_size > IO_BUF_SIZE){ //buffer has no space to save log 
 					raw_spin_lock_irq(&io_buf_lock);
 					io_buf_hand->full = true;
 					raw_spin_unlock_irq(&io_buf_lock);
@@ -2398,53 +2193,6 @@ static bool udroid_io_log(struct request *rq)
 					io_buf_hand = io_buf_hand->next;
 					raw_spin_unlock_irq(&io_buf_lock);
 				}
-				else{
-					find = true;
-					break;
-				}
-			}
-			if(!find){ //no enough buffer;
-				return false;
-			}
-
-			raw_spin_lock_irq(&io_buf_lock);
-			//log size(parsing)
-			memcpy(io_buf_hand->data + io_buf_hand->offset, &log_size, 1);
-			io_buf_hand->offset += 1;
-			//data(uio)
-			memcpy(io_buf_hand->data + io_buf_hand->offset, &log, sizeof(struct uio)); 
-			io_buf_hand->offset += sizeof(struct uio);
-			//process name
-			memcpy(io_buf_hand->data + io_buf_hand->offset, pname, pname_len);
-			io_buf_hand->offset += pname_len;
-			//file name's length
-			memcpy(io_buf_hand->data + io_buf_hand->offset, &fname_len, 1);
-			io_buf_hand->offset += 1;
-			//file name
-			memcpy(io_buf_hand->data + io_buf_hand->offset, fname, fname_len);
-			io_buf_hand->offset += fname_len;
-			raw_spin_unlock_irq(&io_buf_lock);				
-
-		/*
-			sprintf(str_log, "%d%d%d%d%d%d\t %d %d\t %d %d\t %d %d\t %d %d\t %d %s\t %s\t", 
-
-					log.year,log.month, log.day, log.hour, log.min, log.sec,
-					log.ext, log.rwbs, log.fsync, log.fdatasync,
-					log.major_dev, log.minor_dev,
-					log.sector_nb, log.block_len,
-
-					log.pid, pname, fname);
-			printk("[udroid]%s\n", str_log);
-		*/
-			//140523, add ryoung, if file will be over 
-			if(io_buf_hand->offset + 1 + log_size > IO_BUF_SIZE){ //buffer has no space to save log 
-				raw_spin_lock_irq(&io_buf_lock);
-				io_buf_hand->full = true;
-				raw_spin_unlock_irq(&io_buf_lock);
-				wake_up_interruptible(&wait_queue); //wake up user daemon 
-				raw_spin_lock_irq(&io_buf_lock);
-				io_buf_hand = io_buf_hand->next;
-				raw_spin_unlock_irq(&io_buf_lock);
 			}
 		}
 	}

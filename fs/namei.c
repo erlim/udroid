@@ -2846,31 +2846,21 @@ int vfs_unlink(struct inode *dir, struct dentry *dentry)
 static bool udroid_filels_log(struct inode *inode)
 {
         struct ufilels log;
-	int log_size;
+	int log_size = 0;
 //      char str_log[100]; 			//debugging
-        bool find;				//find buffer to save log
-	int idx;				//buffer index
-        struct list_head *next;			//dentry.next
-        struct dentry *dentry;
-	int pname_len;
+        bool find = false;			//find buffer to save log
+	int idx = 0;				//buffer index
+        struct list_head *next = NULL;		//dentry.next
+        struct dentry *dentry = NULL;
+	int pname_len = 0;
 	char pname[PNAME_MAX];
-	int fname_len;
-	char *fname;				//to get file ext, it from dentry.name;
+	int fname_len = 0;
+	char *fname = NULL;			//to get file ext, it from dentry.name;
         struct timespec ts_delete, ts_diff;
         struct tm tm;
 
 	getnstimeofday(&ts_delete);    
 	ts_delete.tv_sec += 60 * 60 * 9;	//GMT +9hour
-
- 	log_size = 0; 
-//	memset(str_log, 0, 100);
-        find = false;
-        idx = 0;
-        next = NULL;
-        dentry = NULL;
-        fname = NULL;
-        fname_len = 0;
-	memset(&tm, 0, sizeof(struct tm));
 
 	//check buffer is allocated?
         if(fls_buf_hand == NULL){ 
@@ -2944,66 +2934,68 @@ static bool udroid_filels_log(struct inode *inode)
 		log_size += pname_len + 1 /*fname size*/ + fname_len;
  	
 		//find buffer with enough space
-                for(idx = 0; idx< FILELS_BUF_COUNT; ++idx){
-                        if(fls_buf_hand->full){   //user deamon hasn't read full buffer yet
-                                raw_spin_lock_irq(&fls_buf_lock);
-                                fls_buf_hand = fls_buf_hand->next;
-                                raw_spin_unlock_irq(&fls_buf_lock);
-                        }else if(fls_buf_hand->offset + log_size > FILELS_BUF_SIZE){ //buffer has no space to save log
-                                raw_spin_lock_irq(&fls_buf_lock);
-                                fls_buf_hand->full = true;
-                                raw_spin_unlock_irq(&fls_buf_lock);
+		if(!IS_ERR(fls_buf_hand)){
+			for(idx = 0; idx< FILELS_BUF_COUNT; ++idx){
+				if(fls_buf_hand->full){   //user deamon hasn't read full buffer yet
+					raw_spin_lock_irq(&fls_buf_lock);
+					fls_buf_hand = fls_buf_hand->next;
+					raw_spin_unlock_irq(&fls_buf_lock);
+				}else if(fls_buf_hand->offset + log_size > FILELS_BUF_SIZE){ //buffer has no space to save log
+					raw_spin_lock_irq(&fls_buf_lock);
+					fls_buf_hand->full = true;
+					raw_spin_unlock_irq(&fls_buf_lock);
+					wake_up_interruptible(&wait_queue); //wake up user daemon
+					raw_spin_lock_irq(&fls_buf_lock);
+					fls_buf_hand = fls_buf_hand->next;
+					raw_spin_unlock_irq(&fls_buf_lock);
+				}
+				else{
+					find = true;
+					break;
+				}
+			}
+			if(!find){ //no enough buffer
+				return false;
+			}
+
+			//--->save log data
+			raw_spin_lock_irq(&fls_buf_lock);
+			//log size(parsing)
+			memcpy(fls_buf_hand->data + fls_buf_hand->offset, &log_size, 1 /*char*/);
+			fls_buf_hand->offset += 1;
+			//data(filels)
+			memcpy(fls_buf_hand->data + fls_buf_hand->offset, &log, sizeof(struct ufilels));
+			fls_buf_hand->offset += sizeof(struct ufilels);
+			//process name
+			memcpy(fls_buf_hand->data + fls_buf_hand->offset, pname, pname_len);
+			fls_buf_hand->offset += pname_len;
+			//file name's length
+			memcpy(fls_buf_hand->data + fls_buf_hand->offset, &fname_len, 1);
+			fls_buf_hand->offset +=1;
+			//file name
+			memcpy(fls_buf_hand->data + fls_buf_hand->offset, fname, fname_len);
+			fls_buf_hand->offset += fname_len;
+			raw_spin_unlock_irq(&fls_buf_lock);
+		/*
+			sprintf(str_log, "%d%d%d%d%d%d %d\t %d%d%d%d%d%d %d\t %d%d%d%d%d%d %d\t %d\t %d %d\t %ld\t %s",
+					  log.c_year, log.c_month, log.c_day, log.c_hour, log.c_min, log.c_sec, log.c_nsec,
+					  log.d_year, log.d_month, log.d_day, log.d_hour, log.d_min, log.d_sec, log.d_nsec,
+					  log.di_year, log.di_month, log.di_day, log.di_hour, log.di_min, log.di_sec, log.di_nsec, 
+					  log.ext, log.major_dev, log.minor_dev,
+					  log.filesize, file_name);
+			printk("[udroid] %s\n", str_log);
+			*/
+
+			//140523, add ryoung, if file will be over
+			if(fls_buf_hand->offset + 1/*size*/ + log_size > FILELS_BUF_SIZE){ //buffer has no space to save log
+				raw_spin_lock_irq(&fls_buf_lock);
+				fls_buf_hand->full = true;
+				raw_spin_unlock_irq(&fls_buf_lock);
 				wake_up_interruptible(&wait_queue); //wake up user daemon
 				raw_spin_lock_irq(&fls_buf_lock);
-                                fls_buf_hand = fls_buf_hand->next;
-                                raw_spin_unlock_irq(&fls_buf_lock);
-                        }
-                        else{
-	        	        find = true;
-                                break;
-                        }
-                }
-                if(!find){ //no enough buffer
-                        return false;
-                }
-
-		//--->save log data
-                raw_spin_lock_irq(&fls_buf_lock);
-		//log size(parsing)
-		memcpy(fls_buf_hand->data + fls_buf_hand->offset, &log_size, 1 /*char*/);
-		fls_buf_hand->offset += 1;
-		//data(filels)
-                memcpy(fls_buf_hand->data + fls_buf_hand->offset, &log, sizeof(struct ufilels));
-                fls_buf_hand->offset += sizeof(struct ufilels);
-		//process name
-		memcpy(fls_buf_hand->data + fls_buf_hand->offset, pname, pname_len);
-		fls_buf_hand->offset += pname_len;
-		//file name's length
-		memcpy(fls_buf_hand->data + fls_buf_hand->offset, &fname_len, 1);
-		fls_buf_hand->offset +=1;
-		//file name
-                memcpy(fls_buf_hand->data + fls_buf_hand->offset, fname, fname_len);
-                fls_buf_hand->offset += fname_len;
-                raw_spin_unlock_irq(&fls_buf_lock);
-	/*
-		sprintf(str_log, "%d%d%d%d%d%d %d\t %d%d%d%d%d%d %d\t %d%d%d%d%d%d %d\t %d\t %d %d\t %ld\t %s",
-				  log.c_year, log.c_month, log.c_day, log.c_hour, log.c_min, log.c_sec, log.c_nsec,
-				  log.d_year, log.d_month, log.d_day, log.d_hour, log.d_min, log.d_sec, log.d_nsec,
-				  log.di_year, log.di_month, log.di_day, log.di_hour, log.di_min, log.di_sec, log.di_nsec, 
-				  log.ext, log.major_dev, log.minor_dev,
-				  log.filesize, file_name);
-		printk("[udroid] %s\n", str_log);
-		*/
-
- 		//140523, add ryoung, if file will be over
-		if(fls_buf_hand->offset + 1/*size*/ + log_size > FILELS_BUF_SIZE){ //buffer has no space to save log
-			raw_spin_lock_irq(&fls_buf_lock);
-			fls_buf_hand->full = true;
-			raw_spin_unlock_irq(&fls_buf_lock);
-			wake_up_interruptible(&wait_queue); //wake up user daemon
-			raw_spin_lock_irq(&fls_buf_lock);
-			fls_buf_hand = fls_buf_hand->next;
-			raw_spin_unlock_irq(&fls_buf_lock);
+				fls_buf_hand = fls_buf_hand->next;
+				raw_spin_unlock_irq(&fls_buf_lock);
+			}
 		}
        }
         

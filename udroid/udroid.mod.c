@@ -35,13 +35,13 @@ __attribute__((section("__versions"))) = {
 	{ 0xa7ecf324, "__init_waitqueue_head" },
 	{ 0x86a4889a, "kmalloc_order_trace" },
 	{ 0x322c1429, "kmem_cache_alloc_trace" },
-	{ 0x37a0cba, "kfree" },
-	{ 0x2e5810c6, "__aeabi_unwind_cpp_pr1" },
-	{ 0x27e1a049, "printk" },
-	{ 0xaea99e9d, "_raw_spin_unlock_irq" },
 	{ 0xfa2a45e, "__memzero" },
 	{ 0x67c2fa54, "__copy_to_user" },
+	{ 0x2e5810c6, "__aeabi_unwind_cpp_pr1" },
+	{ 0xaea99e9d, "_raw_spin_unlock_irq" },
+	{ 0x37a0cba, "kfree" },
 	{ 0xe551272c, "_raw_spin_lock_irq" },
+	{ 0x27e1a049, "printk" },
 	{ 0xb1ad28e0, "__gnu_mcount_nc" },
 };
 
@@ -51,4 +51,4 @@ __attribute__((section(".modinfo"))) =
 "depends=";
 
 
-MODULE_INFO(srcversion, "E8011A09580E356C6BB3FD8");
+MODULE_INFO(srcversion, "21A1A9DA8B420E7D042579D");
