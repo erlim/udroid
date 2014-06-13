@@ -6,12 +6,8 @@
 //utils
 char get_file_ext(char *fname)
 {
-
-        int len = 0;
+        int len = 0;	
         len = strlen(fname);
-	
-	if(fname == NULL || len == 0)	
-		return ETC_FILE;
 
         // 140425 add ryoung, no need to collect IO trace made by uiolog file 
         // UIOLOG file

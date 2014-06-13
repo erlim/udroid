@@ -43,14 +43,14 @@ static int io_parser()
 		fread(&fname_len, 1, 1, read_file);
 		fread(fname, fname_len, 1, read_file);
 	
-		sprintf(s_log, "[%d] %d%d%d%d%d%d %d\t ext:%d\t rwbs:%d\t  fsync:%d %d\t device:%d %d\t sector:%d %d\t %s\t %s\n", 
-				idx, log.year,log.month,log.day,log.hour,log.min,log.sec, log.nsec,
+		sprintf(s_log, "[%d][%d] %d%d%d%d%d%d %d\t ext:%d\t rwbs:%d\t  fsync:%d %d\t device:%d %d\t sector:%d %d\t %s\t %s\n", 
+				idx, log_size, log.year,log.month,log.day,log.hour,log.min,log.sec, log.nsec,
 				log.ext, log.rwbs, log.fsync, log.fdatasync, 
 				log.major_dev, log.minor_dev, log.sector_nb, log.block_len, 
 				pname, fname);
 
 		printf("%s\n", s_log);
-		//fwrite(s_log, 1, strlen(s_log), parse_file);
+		fwrite(s_log, 1, strlen(s_log), parse_file);
 	}
 	
 	return 0;
@@ -60,14 +60,13 @@ static int filels_parser()
 {
 	FILE *read_file, *parse_file;
 	struct ufilels log;
-	int log_size;
+	int log_size = 0;
 	char pname[16];
 	int fname_len;
 	char fname[100];
 	char s_log[200];
+	int idx =1;
 
-	
-	log_size = 0;
 	memset(pname,0,16);
 	memset(fname,0, 100);
 	memset(s_log,0,100);
@@ -93,13 +92,14 @@ static int filels_parser()
 		fread(&fname_len, 1, 1, read_file);
 		fread(fname, fname_len, 1, read_file);
 		
-		sprintf(s_log, "%d%d%d%d%d%d %d\t %d%d%d%d%d%d %d\t %d%d%d%d%d%d %d\t %d\t %lld\t %s\t %s\n", 
-			log.c_year, log.c_month, log.c_day, log.c_hour, log.c_min, log.c_sec, log.c_nsec,
+		sprintf(s_log, "[%d] %d%d%d%d%d%d %d\t %d%d%d%d%d%d %d\t %d%d%d%d%d%d %d\t %d\t %lld\t %s\t %s\n", 
+			idx, log.c_year, log.c_month, log.c_day, log.c_hour, log.c_min, log.c_sec, log.c_nsec,
 			log.d_year, log.d_month, log.d_day, log.d_hour, log.d_min, log.d_sec, log.d_nsec,
 			log.di_year, log.di_month, log.di_day, log.di_hour, log.di_min, log.di_sec, log.di_nsec,
 			log.ext, log.filesize, pname, fname);
 
-		printf("%s\n", s_log);
+		printf("%s\n", s_log);	
+		idx +=1;
 		//fwrite(log, 1, strlen(s_log), parse_file);
 	}
 

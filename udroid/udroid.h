@@ -43,6 +43,8 @@
 #define UDROID_FILELS_FILE 10
 #define UDROID_MEM_FILE 11
 #define UDROID_MEMDETAIL_FILE 12
+#define NULL_FILE 15
+
 //rwbs(read,write, synchronous)
 #define READ_NONE_MODE 0
 #define WRITE_NONE_MODE 1

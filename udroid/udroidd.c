@@ -9,8 +9,8 @@
 #include <time.h>
 
 #define UDROID_DEVICE_FD  "/dev/udroid_device"
-#define UDROID_IO_DIR     "/storage/sdcard0/udroid/io"
-#define UDROID_FILELS_DIR "/storage/sdcard0/udroid/filels"
+#define UDROID_IO_DIR     "/data/udroid/io"
+#define UDROID_FILELS_DIR "/data/udroid/filels"
 
 #include "udroid.h"
 
@@ -27,7 +27,7 @@ static int fls_f_offset;
 static char fls_buf_data[FILELS_BUF_SIZE];
 
 //return value: file descriptor, after creating a new log file
-static int log_file_open(int type)
+static int log_file_creat(int type)
 {
 	char path[300];
 	int ret_fd;
@@ -39,11 +39,11 @@ static int log_file_open(int type)
 	tm = localtime(&tv_now.tv_sec);
 
 	if(type == IO_LOG){
-		sprintf(path, "%s/%.2d%.2d%.2d%.2d%.2d.uio",
-			UDROID_IO_DIR, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+		sprintf(path, "%s/%.2d%.2d%.2d%.2d%.2d%.2d.uio",
+			UDROID_IO_DIR, tm->tm_year+1900-YEAR_BASE, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
 	}else if(type == FILELS_LOG){
-		sprintf(path, "%s/%.2d%.2d%.2d%.2d%.2d.ufls",
-			UDROID_FILELS_DIR, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);	
+		sprintf(path, "%s/%.2d%.2d%.2d%.2d%.2d%.2d.ufls",
+			UDROID_FILELS_DIR, tm->tm_year+1900-YEAR_BASE, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);	
 	}
 
 	ret_fd = creat(path,  0777);
@@ -69,7 +69,7 @@ static void io_file_write()
 			io_f_offset += write_bytes;
 		}else{
 			close(io_fd);
-			io_fd = log_file_open(IO_LOG);	
+			io_fd = log_file_creat(IO_LOG);	
 			io_f_offset = 0;
 			write_bytes = write(io_fd, io_buf_data, read_bytes);
 			io_f_offset += write_bytes;
@@ -88,7 +88,7 @@ static void fls_file_write()
 			fls_f_offset += write_bytes;
 		}else{
 			close(fls_fd);
-			fls_fd = log_file_open(FILELS_LOG);	
+			fls_fd = log_file_creat(FILELS_LOG);	
 			fls_f_offset = 0;
 			write_bytes = write(fls_fd, fls_buf_data, read_bytes);
 			fls_f_offset += write_bytes;
@@ -100,6 +100,8 @@ int main( int argc, char **argv )
 {
 	int retval = 0;
 	struct pollfd events[1];  //0510 ryoung
+	struct timeval tv_now;    //check date(after 2014)
+	struct tm *tm;
 
 	io_fd = 0;
 	io_f_offset = 0;
@@ -110,6 +112,18 @@ int main( int argc, char **argv )
 
 	//sleep for booting	
 	sleep(20); //16~17
+	
+	//sleep until date sync
+	while(1){
+		gettimeofday(&tv_now);
+		tv_now.tv_sec += 60 * 60 * 9;
+		tm = localtime(&tv_now.tv_sec);
+		if(tm->tm_year +1900-YEAR_BASE < YEAR_RELEASE){
+			sleep(2);
+		}else{
+			break;
+		}		
+	};
 
 	//open device file 
 	dev_fd = open(UDROID_DEVICE_FD, O_RDWR | O_NOCTTY ); 
@@ -122,8 +136,8 @@ int main( int argc, char **argv )
 		return -1;
 	}
 	
-	io_fd = log_file_open(IO_LOG);
-	fls_fd = log_file_open(FILELS_LOG);
+	io_fd = log_file_creat(IO_LOG);
+	fls_fd = log_file_creat(FILELS_LOG);
 
  	while(1){
 		retval = poll( (struct pollfd *)&events, 1, 1000); //1000 sec ->16 min
