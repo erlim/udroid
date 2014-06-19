@@ -33,6 +33,13 @@
 
 #include "internal.h"
 
+#ifdef CONFIG_UDROID
+#include "../udroid/udroid.h"
+#include "../udroid/common.h"
+
+extern struct cbuf* fls_buf_hand;
+#endif
+
 int do_truncate(struct dentry *dentry, loff_t length, unsigned int time_attrs,
 	struct file *filp)
 {
@@ -989,7 +996,10 @@ long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
 				fd_install(fd, f);
 #ifdef CONFIG_UDROID
 				if(flags & O_CREAT){
-					file_update_crtime(f);
+					//+140619 add ryoung, date & time sync
+					if(fls_buf_hand != NULL){  
+						file_update_crtime(f);
+					}
 				}
 #endif
 			}

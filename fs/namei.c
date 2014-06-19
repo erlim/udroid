@@ -2846,8 +2846,9 @@ int vfs_unlink(struct inode *dir, struct dentry *dentry)
 static bool udroid_filels_log(struct inode *inode)
 {
         struct ufilels log;
-	int log_size = 0;
-//      char str_log[100]; 			//debugging
+	//140619 modify ryoung /*log_size*/
+	unsigned char log_size = 0;
+//      char str_log[200]; 			//debugging
         bool find = false;			//find buffer to save log
 	int idx = 0;				//buffer index
         struct list_head *next = NULL;		//dentry.next
@@ -2859,6 +2860,7 @@ static bool udroid_filels_log(struct inode *inode)
         struct timespec ts_delete, ts_diff;
         struct tm tm;
 
+//	memset(str_log,0,200);
 	getnstimeofday(&ts_delete);    
 	ts_delete.tv_sec += 60 * 60 * 9;	//GMT +9hour
 
@@ -2872,9 +2874,14 @@ static bool udroid_filels_log(struct inode *inode)
 		if(!dentry){
 			return false;
 		}
-		fname = (char*)dentry->d_name.name;
-		fname_len = strlen(fname);
-                
+		//140612, add ryoung
+		if(dentry->d_name.len > 0){
+			fname = (char*)dentry->d_name.name;
+			fname_len = strlen(fname);
+			log.ext = get_file_ext(fname);
+		}else{
+			log.ext = NULL_FILE;
+		}
 		//get create time from inode
  		//140523, add ryoung, if crtime is not set cuz created before then ryoung kernel 
 		if(inode->i_crtime.tv_sec != 0){
@@ -2887,7 +2894,7 @@ static bool udroid_filels_log(struct inode *inode)
                 //        return false;
                 //}
 		//no need to save udroid file 
-		log.ext = get_file_ext(fname);
+		//log.ext = get_file_ext(fname);
                 //--->collect log data
 		//create time
                 log.c_month = tm.tm_mon + 1;
@@ -2922,7 +2929,11 @@ static bool udroid_filels_log(struct inode *inode)
 		log.di_hour = tm.tm_hour;
 		log.di_min = tm.tm_min;
 		log.di_sec = tm.tm_sec;
-		log.di_nsec = ts_diff.tv_nsec;
+		if(inode->i_crtime.tv_sec != 0){
+			log.di_nsec = ts_diff.tv_nsec;
+		}else{
+			log.di_nsec = 0;
+		}
 		//other information, 140523 add ryoung, 
 		log.major_dev = MAJOR(inode->i_sb->s_dev);
 		log.minor_dev = MINOR(inode->i_sb->s_dev);
@@ -2973,21 +2984,24 @@ static bool udroid_filels_log(struct inode *inode)
 			memcpy(fls_buf_hand->data + fls_buf_hand->offset, &fname_len, 1);
 			fls_buf_hand->offset +=1;
 			//file name
-			memcpy(fls_buf_hand->data + fls_buf_hand->offset, fname, fname_len);
-			fls_buf_hand->offset += fname_len;
+			if(fname_len > 0){
+				memcpy(fls_buf_hand->data + fls_buf_hand->offset, fname, fname_len);
+				fls_buf_hand->offset += fname_len;
+			}
 			raw_spin_unlock_irq(&fls_buf_lock);
-		/*
-			sprintf(str_log, "%d%d%d%d%d%d %d\t %d%d%d%d%d%d %d\t %d%d%d%d%d%d %d\t %d\t %d %d\t %ld\t %s",
+			/*
+			sprintf(str_log, "[%d/%d] %d%d%d%d%d%d %d\t %d%d%d%d%d%d %d\t %d%d%d%d%d%d %d\t %d\t %d %d\t %lld\t %s",
+					  log_size, fls_buf_hand->offset,
 					  log.c_year, log.c_month, log.c_day, log.c_hour, log.c_min, log.c_sec, log.c_nsec,
 					  log.d_year, log.d_month, log.d_day, log.d_hour, log.d_min, log.d_sec, log.d_nsec,
 					  log.di_year, log.di_month, log.di_day, log.di_hour, log.di_min, log.di_sec, log.di_nsec, 
 					  log.ext, log.major_dev, log.minor_dev,
-					  log.filesize, file_name);
+					  log.filesize, fname);
 			printk("[udroid] %s\n", str_log);
 			*/
 
 			//140523, add ryoung, if file will be over
-			if(fls_buf_hand->offset + 1/*size*/ + log_size > FILELS_BUF_SIZE){ //buffer has no space to save log
+			if(fls_buf_hand->offset + 1/*log size, char*/ + log_size > FILELS_BUF_SIZE){ //buffer has no space to save log
 				raw_spin_lock_irq(&fls_buf_lock);
 				fls_buf_hand->full = true;
 				raw_spin_unlock_irq(&fls_buf_lock);

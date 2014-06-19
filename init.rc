@@ -232,7 +232,7 @@ on post-fs-data
     mkdir /data/udroid/io 0777 root root
     mkdir /data/udroid/filels 0777 root root
     mkdir /data/udroid/mem 0777 root root
-    mkdir /data/udroid/minfo 0777 root root
+    mkdir /data/udroid/mdetail 0777 root root
     mkdir /data/etc 0777 root root
 
     # For security reasons, /data/local/tmp should always be empty.

@@ -197,7 +197,9 @@ static int do_fsync(unsigned int fd, int datasync)
 #ifdef CONFIG_UDROID
 	struct inode *inode = NULL;
 #endif
+
 	file = fget(fd);
+
 #ifdef CONFIG_UDROID
 	if(file){
 		//inode address spcae's fsync update
